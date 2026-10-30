@@ -169,7 +169,7 @@ Every agent herdr runs shows up with its live status, terminal and alerts. The c
 | **Hermes** | Native SQLite session store | — use Terminal |
 | **Muse Code** | **Linux untested with real Muse.** Native session log, bound to the pane by the session lock Muse writes for its process; panes in one folder each show their own session. macOS and Linux; Windows uses Terminal. See [Muse chat](muse-chat.md). | — use Terminal |
 | **Antigravity (agy)** | **Experimental; macOS untested.** Native ledger, selected by the running process’s held conversation lock. Linux native-tested; Windows uses terminal text. See [Agy behavior and limits](agy-chat.md). | — use Terminal |
-| **Letta Code** | **Experimental; Linux and macOS.** Read-only native transcript, once herdr's Letta integration is installed (`herdr integration install letta`, experimental). A turn shows when it ends; meanwhile Chat says **Working…**. Windows uses Terminal. See [Letta Code](#letta-code) below. | — use Terminal |
+| **Letta Code** | **Experimental; Linux and macOS.** Read-only native transcript, once herdr's Letta integration is installed (`herdr integration install letta`, experimental). A turn shows when it ends; meanwhile Chat says **Working…**. Windows uses Terminal. See [Letta Code](#letta-code) below. | ✓ the `/model` list (the rows its picker shows) and the reasoning level it then shows; other tabs, the search and other levels — use Terminal |
 | **GitHub Copilot CLI** | Linux native transcript when the foreground session is verified. See [Copilot setup and limits](copilot-chat.md). | — recorded choices are read-only; answer questions and approvals in Terminal |
 | **Anything else** | The terminal's text | — use Terminal |
 
