@@ -6,7 +6,8 @@ import { forgetTranscriptState, paneTranscript, transcriptPage, transcriptToolOu
 import { ConversationUnavailable } from "./conversation-shared.ts";
 import * as herdr from "./herdr/client.ts";
 import { LettaUnavailable, lettaToolOutput, parseLettaTranscript } from "./letta.ts";
-import { isLettaProcess, type LettaProcess, lettaBinding, lettaInStartFolder, lettaLocalOwner, lettaRecordOwned, lettaOpenedSessions, lettaSessionOf, lettaTranscriptFor, lettaTranscriptHeld, lettaTranscriptPath, parseEnviron } from "./letta-store.ts";
+import { isLettaProcess, type LettaProcess, lettaBinding, lettaInStartFolder, lettaLocalOwner, lettaProcessSession, lettaRecordOwned, lettaOpenedSessions, lettaSessionOf, lettaTranscriptFor, lettaTranscriptHeld, lettaTranscriptPath, parseEnviron } from "./letta-store.ts";
+import { processStartLowerBound } from "./process-start.ts";
 import type { HerdrPane, SessionSnapshot } from "../shared/protocol.ts";
 
 // Recorded from letta-code 0.34.27 in an isolated herdr session (local backend, herdr's Letta
@@ -323,6 +324,54 @@ describe("Letta conversation binding", () => {
       child.kill();
       movedIn.kill();
       await Promise.all([child.exited, movedIn.exited]);
+    }
+  });
+
+  test("a letta process's own record binds its pane in the home folder, beside another letta, and after /new", async () => {
+    const config = join(root, "config");
+    // Protos and a second letta both in HOME: the folder's record speaks for neither
+    const child = Bun.spawn(["sleep", "300"], { env: { HOME: root, PWD: root, LETTA_CONFIG_DIR: config, PATH: process.env["PATH"] ?? "" }, cwd: root });
+    const info = spyOn(herdr, "paneProcessInfo").mockImplementation(async () => ({
+      pane_id: "w1:p1", foreground_processes: [{ pid: child.pid, argv: ["bun", "/opt/letta/bin/letta"], cwd: root }],
+    }) as never);
+    const rpc = spyOn(herdr, "herdrRpc").mockImplementation(async () => ({}) as never);
+    try {
+      const started = processStartLowerBound(child.pid)!;
+      const own = (body: Record<string, unknown>): void => {
+        mkdirSync(join(config, "sessions"), { recursive: true });
+        writeFileSync(join(config, "sessions", `${child.pid}.json`), JSON.stringify({ pid: child.pid, started_at: started + 50, agent_id: AGENT, conversation_id: "local-conv-1", updated_at: Date.now(), ...body }));
+      };
+      const owner: LettaProcess = { pid: child.pid, cwd: root, startedAt: started, env: { HOME: root, PWD: root, LETTA_CONFIG_DIR: config } };
+      expect(lettaProcessSession(owner)).toBeNull();
+      own({});
+      expect(lettaProcessSession(owner)).toEqual({ agent: AGENT, conversation: "local-conv-1" });
+      // a record another process left with this pid: begun before this one, or another pid in it
+      own({ started_at: started - 5_000 });
+      expect(lettaProcessSession(owner)).toBeNull();
+      own({ pid: child.pid + 1 });
+      expect(lettaProcessSession(owner)).toBeNull();
+      own({ conversation_id: "../x" });
+      expect(lettaProcessSession(owner)).toBeNull();
+
+      // herdr still reports the conversation the pane left before /new; the record names the one it is on
+      own({});
+      const path = lettaTranscriptPath(join(config, "transcripts"), AGENT, "local-conv-1");
+      mkdirSync(join(path, ".."), { recursive: true });
+      writeFileSync(path, newLog);
+      const record = join(config, "lc-local-backend", "conversations", Buffer.from("conversation:local-conv-1").toString("base64url"));
+      mkdirSync(record, { recursive: true });
+      writeFileSync(join(record, "conversation.json"), localConversation);
+      const protos = pane("w1:p1", `default:${AGENT}`, root);
+      const ally = pane("w2:p1", "default:agent-b", root);
+      expect(await paneTranscript(protos.pane_id, undefined, { panes: [protos, ally] } as SessionSnapshot)).toEqual({ source: "letta-transcript", path });
+      // the store must still say the conversation is this agent's
+      own({ agent_id: "agent-local-b" });
+      await expect(paneTranscript(protos.pane_id, undefined, { panes: [protos, ally] } as SessionSnapshot)).rejects.toThrow("no_session_path");
+    } finally {
+      info.mockRestore();
+      rpc.mockRestore();
+      child.kill();
+      await child.exited;
     }
   });
 });

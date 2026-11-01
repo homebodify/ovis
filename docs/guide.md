@@ -268,8 +268,12 @@ A pane's plan is the task list a Claude Code agent keeps (`TaskCreate` / `TaskUp
 ### Letta Code
 
 Letta Code's chat reads the transcript the pane's own `letta` process keeps
-(`~/.letta/transcripts`, or its `LETTA_CONFIG_DIR` / `LETTA_TRANSCRIPT_ROOT`), when three facts
-agree: herdr's Letta integration (`herdr integration install letta`, experimental; start `letta`
+(`~/.letta/transcripts`, or its `LETTA_CONFIG_DIR` / `LETTA_TRANSCRIPT_ROOT`). A `letta` that
+records the conversation it has open in its own file (`<config dir>/sessions/<pid>.json`, rewritten
+on start and on every switch) is read from that file alone, in any folder, beside other `letta`
+panes and after `/new` or `/resume` (Letta's local store must still name that agent for a
+local-backend conversation). For a `letta` that writes no such file, Chat reads the transcript when
+three facts agree: herdr's Letta integration (`herdr integration install letta`, experimental; start `letta`
 once before installing it, since it needs `~/.letta`) names a
 conversation for the pane; Letta's own record in the project folder (`.letta/settings.local.json`)
 names the same one, was last written more than two seconds before that `letta` process started and
@@ -290,7 +294,7 @@ turns Letta Code wrote on this PC show. Choose **Letta Code** in **New workspace
 agent…** or **New worktree** where `letta` is installed, or run `letta` in a herdr pane's
 **Terminal**.
 
-Known limits ([#2314](https://github.com/devswha/ovis/issues/2314)): nothing herdr or Letta
+Known limits ([#2314](https://github.com/devswha/ovis/issues/2314)), for a `letta` with no file of its own: nothing herdr or Letta
 reports says which conversation a running `letta` is on now (herdr 0.9.5 keeps the first report of
 a `letta` process, and Letta records its conversation per folder, not per process), so the binding
 rests on the checks above. Each of three rare cases needs a folder move by Letta's own tools plus

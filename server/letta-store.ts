@@ -282,10 +282,48 @@ export function lettaLocalOwner(store: string, agent: string, conversation: stri
   } catch { return false; }
 }
 
+/** How long after the earliest moment a process can have started its own record may say it began. */
+const RECORD_START_SLACK_MS = 10_000;
+
+/**
+ * The conversation a letta process says it has open, in its own record
+ * (`<config dir>/sessions/<pid>.json`, rewritten on start and on every switch), or null for no
+ * record, a record of another process (another pid, or the same pid begun at another time), or one
+ * that does not read as Letta writes it. A Letta that writes none leaves the binding to herdr's
+ * report and the project record (lettaTranscriptFor).
+ */
+export function lettaProcessSession(owner: LettaProcess): { agent: string; conversation: string } | null {
+  const config = lettaConfigDir(owner.env);
+  if (config === null) return null;
+  const text = readBounded(join(config, "sessions", `${owner.pid}.json`), SETTINGS_BYTES);
+  if (text === null) return null;
+  let record: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    record = parsed as Record<string, unknown>;
+  } catch { return null; }
+  const { pid, started_at: started, agent_id: agent, conversation_id: conversation } = record;
+  if (pid !== owner.pid || typeof started !== "number" || started < owner.startedAt || started > owner.startedAt + RECORD_START_SLACK_MS) return null;
+  if (typeof agent !== "string" || !ID.test(agent) || typeof conversation !== "string" || !ID.test(conversation)) return null;
+  return { agent, conversation };
+}
+
 /** The transcript a Letta pane shows, written and held as lettaTranscriptHeld says, or null. */
 export async function resolveLettaTranscript(pane: HerdrPane, panes: readonly HerdrPane[], known?: ProcessInfo | null): Promise<LettaTranscript | null> {
   const owner = await paneLettaProcess(pane.pane_id, known);
-  if (owner === null || !lettaInStartFolder(owner) || !lettaRecordOwned(pane, panes, owner)) return null;
+  if (owner === null) return null;
+  // the process's own record names its conversation now, wherever it runs and whatever shares its folder
+  const own = lettaProcessSession(owner);
+  const ownRoot = own === null ? null : lettaTranscriptRoot(owner.env);
+  if (own !== null && ownRoot !== null) {
+    const store = lettaLocalStore(owner.env);
+    const path = lettaTranscriptPath(ownRoot, own.agent, own.conversation);
+    const session = own.conversation === "default" ? `default:${own.agent}` : own.conversation;
+    if (store === null || !lettaLocalOwner(store, own.agent, own.conversation)) return null;
+    return lettaTranscriptHeld(path, ownRoot) ? { path, session, ...own } : null;
+  }
+  if (!lettaInStartFolder(owner) || !lettaRecordOwned(pane, panes, owner)) return null;
   const found = lettaTranscriptFor(pane, panes, owner);
   const store = lettaLocalStore(owner.env);
   const root = lettaTranscriptRoot(owner.env);
